@@ -553,6 +553,7 @@
 
     const sysLog = document.getElementById('sysLog');
     logLines.forEach((line, i) => {
+      setTimeout(playSuccessSound, 1800);
       setTimeout(() => {
         const div = document.createElement('div');
         div.className = 'log-line';
@@ -570,6 +571,7 @@
       btn.style.color = '#ffb800';
       btn.style.borderColor = '#ffb800';
 
+      setTimeout(playSuccessSound, 1800);
       setTimeout(() => {
         btn.textContent = 'ACCESS GRANTED';
         btn.style.color = '#39ff14';
@@ -577,6 +579,101 @@
         btn.style.boxShadow = '0 0 12px #39ff1466, 0 0 30px #39ff1433';
       }, 1800);
     });
+    // --- SONIC UX LAYER INJECTED BY ANTIGRAVITY ---
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playHoverSound() {
+
+      if(audioCtx.state === "suspended") audioCtx.resume();
+
+      const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+
+      osc.type = "square"; osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+
+      osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.05);
+
+      gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+
+      osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+
+    }
+
+    function playTypingSound() {
+
+      if(audioCtx.state === "suspended") audioCtx.resume();
+
+      const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+
+      osc.type = "triangle"; osc.frequency.setValueAtTime(1200 + Math.random()*400, audioCtx.currentTime);
+
+      gain.gain.setValueAtTime(0.015, audioCtx.currentTime);
+
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.03);
+
+      osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.03);
+
+    }
+
+    function playClickSound() {
+
+      if(audioCtx.state === "suspended") audioCtx.resume();
+
+      const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+
+      osc.type = "sawtooth"; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+
+      osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.1);
+
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+
+      osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+
+    }
+
+    function playSuccessSound() {
+
+      if(audioCtx.state === "suspended") audioCtx.resume();
+
+      [440, 554.37, 659.25].forEach((freq, i) => {
+
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+
+        osc.type = "sine"; osc.frequency.setValueAtTime(freq * 2, audioCtx.currentTime + (i*0.1));
+
+        gain.gain.setValueAtTime(0, audioCtx.currentTime);
+
+        gain.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + (i*0.1) + 0.05);
+
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (i*0.1) + 0.8);
+
+        osc.connect(gain); gain.connect(audioCtx.destination); osc.start(audioCtx.currentTime + (i*0.1)); osc.stop(audioCtx.currentTime + (i*0.1) + 0.8);
+
+      });
+
+    }
+
+    document.querySelectorAll("input").forEach(el => {
+
+      el.addEventListener("focus", playHoverSound);
+
+      el.addEventListener("input", playTypingSound);
+
+    });
+
+    const authBtn = document.querySelector(".submit-btn");
+
+    if(authBtn) {
+
+      authBtn.addEventListener("mouseenter", playHoverSound);
+
+      authBtn.addEventListener("click", playClickSound);
+
+    }
   </script>
 </body>
 </html>
