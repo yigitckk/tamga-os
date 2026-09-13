@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TAMGA OS // SECURE TERMINAL</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --cyan: #00f0ff;
+      --cyan-dim: #00f0ff33;
+      --magenta: #ff2d95;
+      --magenta-dim: #ff2d9533;
+      --green: #39ff14;
+      --green-dim: #39ff1422;
+      --bg: #0a0a0f;
+      --panel: #0d0d1a;
+      --border: #1a1a2e;
+      --text: #c0c0d0;
+      --text-dim: #555570;
+      --glow-cyan: 0 0 8px #00f0ff88, 0 0 20px #00f0ff44;
+      --glow-magenta: 0 0 8px #ff2d9588, 0 0 20px #ff2d9544;
+      --glow-green: 0 0 8px #39ff1488, 0 0 20px #39ff1444;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      font-family: 'Share Tech Mono', monospace;
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    /* ── Scanline overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.08) 2px,
+        rgba(0, 0, 0, 0.08) 4px
+      );
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    /* ── CRT vignette ── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6) 100%);
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    /* ── Animated grid background ── */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--cyan-dim) 1px, transparent 1px),
+        linear-gradient(90deg, var(--cyan-dim) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridScroll 20s linear infinite;
+      opacity: 0.3;
+    }
+
+    @keyframes gridScroll {
+      0% { transform: translate(0, 0); }
+      100% { transform: translate(60px, 60px); }
+    }
+
+    /* ── Floating particles ── */
+    .particles {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      z-index: 1;
+    }
+
+    .particle {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: var(--cyan);
+      border-radius: 50%;
+      box-shadow: var(--glow-cyan);
+      animation: float linear infinite;
+      opacity: 0;
+    }
+
+    @keyframes float {
+      0% { transform: translateY(100vh) scale(0); opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+    }
+
+    /* ── Main container ── */
+    .terminal-wrapper {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      padding: 20px;
+    }
+
+    .terminal-frame {
+      width: 100%;
+      max-width: 520px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, #0d0d1acc, #0a0a12ee);
+      backdrop-filter: blur(20px);
+      position: relative;
+      clip-path: polygon(
+        0 12px, 12px 0, calc(100% - 12px) 0, 100% 12px,
+        100% calc(100% - 12px), calc(100% - 12px) 100%,
+        12px 100%, 0 calc(100% - 12px)
+      );
+    }
+
+    .terminal-frame::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      background: linear-gradient(135deg, var(--cyan), var(--magenta), var(--cyan));
+      clip-path: polygon(
+        0 12px, 12px 0, calc(100% - 12px) 0, 100% 12px,
+        100% calc(100% - 12px), calc(100% - 12px) 100%,
+        12px 100%, 0 calc(100% - 12px)
+      );
+      z-index: -1;
+      opacity: 0.6;
+      animation: borderPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes borderPulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.8; }
+    }
+
+    /* ── Header bar ── */
+    .header-bar {
+      background: linear-gradient(90deg, var(--cyan-dim), transparent, var(--magenta-dim));
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header-bar .status-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .status-dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: block;
+    }
+
+    .status-dots .dot-red { background: #ff3b3b; box-shadow: 0 0 6px #ff3b3b88; }
+    .status-dots .dot-yellow { background: #ffb800; box-shadow: 0 0 6px #ffb80088; }
+    .status-dots .dot-green { background: var(--green); box-shadow: 0 0 6px #39ff1488; }
+
+    .header-bar .session-id {
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* ── Terminal body ── */
+    .terminal-body {
+      padding: 32px 28px 28px;
+    }
+
+    /* ── Logo / Title ── */
+    .logo-section {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .logo-glyph {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 42px;
+      font-weight: 900;
+      letter-spacing: 8px;
+      background: linear-gradient(135deg, var(--cyan), var(--magenta));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 12px var(--cyan));
+      position: relative;
+    }
+
+    .logo-glyph::after {
+      content: 'TAMGA';
+      position: absolute;
+      left: 0;
+      top: 0;
+      background: linear-gradient(135deg, var(--cyan), var(--magenta));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: blur(8px);
+      opacity: 0.5;
+    }
+
+    .logo-sub {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px;
+      letter-spacing: 6px;
+      color: var(--text-dim);
+      margin-top: 6px;
+    }
+
+    .classification-banner {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 4px 16px;
+      border: 1px solid var(--magenta);
+      color: var(--magenta);
+      font-size: 10px;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      animation: classificationFlash 2s ease-in-out infinite;
+    }
+
+    @keyframes classificationFlash {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; box-shadow: var(--glow-magenta); }
+    }
+
+    /* ── System log lines ── */
+    .sys-log {
+      margin-bottom: 24px;
+      font-size: 11px;
+      line-height: 1.8;
+      color: var(--text-dim);
+    }
+
+    .sys-log .log-line {
+      opacity: 0;
+      animation: typeIn 0.3s ease forwards;
+    }
+
+    .sys-log .log-line .timestamp { color: var(--text-dim); }
+    .sys-log .log-line .ok { color: var(--green); }
+    .sys-log .log-line .warn { color: #ffb800; }
+    .sys-log .log-line .module { color: var(--cyan); }
+
+    @keyframes typeIn {
+      from { opacity: 0; transform: translateX(-8px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* ── Form fields ── */
+    .input-group {
+      position: relative;
+      margin-bottom: 18px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin-bottom: 6px;
+    }
+
+    .input-group .field-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--border);
+      background: #08081299;
+      transition: all 0.3s ease;
+    }
+
+    .input-group .field-wrapper:focus-within {
+      border-color: var(--cyan);
+      box-shadow: var(--glow-cyan), inset 0 0 20px var(--cyan-dim);
+    }
+
+    .input-group .field-icon {
+      padding: 0 12px;
+      color: var(--text-dim);
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 12px 12px 12px 0;
+      background: transparent;
+      border: none;
+      color: var(--cyan);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 14px;
+      letter-spacing: 1px;
+      outline: none;
+      caret-color: var(--cyan);
+    }
+
+    .input-group input::placeholder {
+      color: var(--text-dim);
+      letter-spacing: 2px;
+    }
+
+    .input-group input:-webkit-autofill {
+      -webkit-box-shadow: 0 0 0 1000px #08081299 inset;
+      -webkit-text-fill-color: var(--cyan);
+    }
+
+    /* ── Submit button ── */
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      margin-top: 8px;
+      background: linear-gradient(135deg, var(--cyan-dim), var(--magenta-dim));
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+    }
+
+    .submit-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      transform: translateX(-100%);
+      transition: transform 0.5s ease;
+    }
+
+    .submit-btn:hover {
+      background: linear-gradient(135deg, #00f0ff22, #ff2d9522);
+      box-shadow: var(--glow-cyan);
+      color: #fff;
+    }
+
+    .submit-btn:hover::before {
+      transform: translateX(100%);
+    }
+
+    .submit-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* ── Footer info ── */
+    .terminal-footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    .footer-left { display: flex; align-items: center; gap: 8px; }
+
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--green);
+      border-radius: 50%;
+      box-shadow: var(--glow-green);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .corner-decor {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-color: var(--cyan);
+      opacity: 0.4;
+    }
+
+    .corner-decor.tl { top: 6px; left: 6px; border-top: 1px solid; border-left: 1px solid; }
+    .corner-decor.tr { top: 6px; right: 6px; border-top: 1px solid; border-right: 1px solid; }
+    .corner-decor.bl { bottom: 6px; left: 6px; border-bottom: 1px solid; border-left: 1px solid; }
+    .corner-decor.br { bottom: 6px; right: 6px; border-bottom: 1px solid; border-right: 1px solid; }
+
+    /* ── HEX background data stream ── */
+    .hex-stream {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+      opacity: 0.04;
+      font-size: 10px;
+      line-height: 1.6;
+      color: var(--cyan);
+      word-break: break-all;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 560px) {
+      .terminal-body { padding: 24px 18px 18px; }
+      .logo-glyph { font-size: 32px; letter-spacing: 4px; }
+      .classification-banner { font-size: 8px; letter-spacing: 2px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Background layers -->
+  <div class="grid-bg"></div>
+  <div class="hex-stream" id="hexStream"></div>
+  <div class="particles" id="particles"></div>
+
+  <!-- Terminal -->
+  <div class="terminal-wrapper">
+    <div class="terminal-frame">
+      <div class="corner-decor tl"></div>
+      <div class="corner-decor tr"></div>
+      <div class="corner-decor bl"></div>
+      <div class="corner-decor br"></div>
+
+      <!-- Header -->
+      <div class="header-bar">
+        <div class="status-dots">
+          <span class="dot-red"></span>
+          <span class="dot-yellow"></span>
+          <span class="dot-green"></span>
+        </div>
+        <div class="session-id">session: <span id="sessionId"></span></div>
+      </div>
+
+      <!-- Body -->
+      <div class="terminal-body">
+        <div class="logo-section">
+          <div class="logo-glyph">TAMGA</div>
+          <div class="logo-sub">Operating System v3.0</div>
+          <div class="classification-banner">Top Secret // SCI // NOFORN</div>
+        </div>
+
+        <!-- System log -->
+        <div class="sys-log" id="sysLog"></div>
+
+        <!-- Login form -->
+        <form id="loginForm" autocomplete="off">
+          <div class="input-group">
+            <label>Operative ID</label>
+            <div class="field-wrapper">
+              <span class="field-icon">&#9654;</span>
+              <input type="text" id="username" placeholder="enter_callsign" required spellcheck="false">
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label>Passphrase</label>
+            <div class="field-wrapper">
+              <span class="field-icon">&#9670;</span>
+              <input type="password" id="password" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" required>
+            </div>
+          </div>
+
+          <button type="submit" class="submit-btn">Authenticate</button>
+        </form>
+
+        <!-- Footer -->
+        <div class="terminal-footer">
+          <div class="footer-left">
+            <div class="pulse-dot"></div>
+            <span>Secure Channel Active</span>
+          </div>
+          <span>AES-256 // TLS 1.3</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Generate random hex string
+    function randHex(len) {
+      const chars = '0123456789abcdef';
+      let s = '';
+      for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * 16)];
+      return s;
+    }
+
+    // Session ID
+    document.getElementById('sessionId').textContent = randHex(8).toUpperCase();
+
+    // Background hex data stream
+    const hexEl = document.getElementById('hexStream');
+    let hexContent = '';
+    for (let i = 0; i < 4000; i++) {
+      hexContent += randHex(2) + ' ';
+      if (i % 40 === 39) hexContent += '\n';
+    }
+    hexEl.textContent = hexContent;
+
+    // Floating particles
+    const particlesEl = document.getElementById('particles');
+    for (let i = 0; i < 30; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.style.left = Math.random() * 100 + '%';
+      p.style.animationDuration = (6 + Math.random() * 10) + 's';
+      p.style.animationDelay = (Math.random() * 10) + 's';
+      p.style.width = p.style.height = (1 + Math.random() * 2) + 'px';
+      if (Math.random() > 0.7) {
+        p.style.background = '#ff2d95';
+        p.style.boxShadow = '0 0 8px #ff2d9588';
+      }
+      particlesEl.appendChild(p);
+    }
+
+    // System boot log
+    const logLines = [
+      { text: '[<span class="timestamp">00:00:01</span>] <span class="module">KERNEL</span>  tamga_core loaded .............. <span class="ok">OK</span>' },
+      { text: '[<span class="timestamp">00:00:02</span>] <span class="module">NET</span>     encrypted tunnel established ... <span class="ok">OK</span>' },
+      { text: '[<span class="timestamp">00:00:03</span>] <span class="module">AUTH</span>    biometric scanner standby ...... <span class="ok">OK</span>' },
+      { text: '[<span class="timestamp">00:00:04</span>] <span class="module">SEC</span>     threat level: <span class="warn">ELEVATED</span>' },
+      { text: '[<span class="timestamp">00:00:05</span>] <span class="module">SYS</span>     awaiting credentials ........... <span class="ok">READY</span>' },
+    ];
+
+    const sysLog = document.getElementById('sysLog');
+    logLines.forEach((line, i) => {
+      setTimeout(() => {
+        const div = document.createElement('div');
+        div.className = 'log-line';
+        div.innerHTML = line.text;
+        div.style.animationDelay = '0s';
+        sysLog.appendChild(div);
+      }, 400 + i * 350);
+    });
+
+    // Form handler
+    document.getElementById('loginForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const btn = this.querySelector('.submit-btn');
+      btn.textContent = 'VERIFYING...';
+      btn.style.color = '#ffb800';
+      btn.style.borderColor = '#ffb800';
+
+      setTimeout(() => {
+        btn.textContent = 'ACCESS GRANTED';
+        btn.style.color = '#39ff14';
+        btn.style.borderColor = '#39ff14';
+        btn.style.boxShadow = '0 0 12px #39ff1466, 0 0 30px #39ff1433';
+      }, 1800);
+    });
+  </script>
+</body>
+</html>
